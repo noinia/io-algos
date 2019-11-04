@@ -92,13 +92,34 @@ vebSplitIndices n | n <= 1    = []
 
 newtype GVTree v a = VTree (v a) deriving (Show,Eq)
 
--- | Looks up the index of the left child of a node
-leftChildIdx     :: Int -> Int -> Maybe Int
-leftChildIdx n i | n <= 1    = Nothing
-                 | otherwise = undefined
+data GTree v a = Tree !Int !(GVTree v a) deriving (Show,Eq)
+
+type Tree v a = Maybe (GTree v a)
+
+pattern Leaf :: Tree v a
+pattern Leaf = Nothing
+
+pattern Node       :: Vector v a => Tree v a -> a -> Tree v a -> Tree v a
+pattern Node l x r <- ((>>= node) -> Just (l,x,r))
+
+node                      :: Vector v a => GTree v a -> Maybe (Tree v a, a, Tree v a)
+node (Tree i t@(VTree v)) = (\x -> (l, x,r)) <$> (v GV.!? i)
+  where
+    l   = f (i+1)
+    r   = f (i+1+sizeOf l)
+    f j = (\_ -> Tree j t) <$> v GV.!? j
+
+sizeOf _ = 1
 
 
+test :: Tree V.Vector Int
+test = Just . Tree 0 . VTree . V.fromList $ [1..3]
+-- FIXME: this does not look right yet
 
+
+show' :: (Vector v a, Show a) => Tree v a -> String
+show' Leaf = "Leaf"
+show' (Node l x r) = "Node (" <> show' l <> ") " <> show x <> " (" <> show' r <> ")"
 
 
 -- data GVTree v i l = VTree { start    :: Int

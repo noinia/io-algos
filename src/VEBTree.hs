@@ -1,11 +1,13 @@
+{-# LANGUAGE PartialTypeSignatures #-}
+
 module VEBTree where
 
 import           BinarySearch
 import           Control.Applicative
 import qualified Data.DList as DList
+import           Data.Functor.Classes
 import qualified Data.List as List
 import           Data.Maybe (mapMaybe, isJust)
-import           Data.Proxy
 import qualified Data.Vector as V
 import           Data.Vector.Generic (Vector, (!))
 import qualified Data.Vector.Generic as GV
@@ -84,6 +86,10 @@ data VEBTree vk va k a = VEBTree { _keys   :: !(vk (VNode k))
                                  }
 
 
+instance (VEB vk va k a, Show k, Show a) => Show (VEBTree vk va k a) where
+  show (VEBTree ks vs) = mconcat ["VEBTree ", show (GV.toList ks), " ", show (GV.toList vs)]
+
+
 type VEB vk va k a = ( Vector vk (VNode k)
                      , Vector va a
                      )
@@ -101,6 +107,7 @@ vebSingleton k x = VEBTree (GV.singleton (VLeaf k 0)) (GV.singleton x)
 data Tree vk va k a = Tree { _treeData :: !(VEBTree vk va k a)
                            , _idx      :: {-# UNPACK #-} !Int
                            }
+
 
 
 singleton k x = Tree (vebSingleton k x) 0
@@ -134,18 +141,38 @@ pattern Node       :: VEB vk va k a => Tree vk va k a -> k -> Tree vk va k a -> 
 pattern Node l k r <- (asNode -> Just (Node' l k r))
 
 
+instance (Show k, Show a, VEB vk va k a) => Show (Tree vk va k a) where
+  show = \case
+    Leaf k x   -> mconcat ["Leaf ", show k, " ", show x]
+    Node l k r -> mconcat ["Node (", show l, ") ", show k, " (", show r, ")"]
+
+
+
+
+
+
 --------------------------------------------------------------------------------
 -- * Constructing a VEB Tree
 
-fromPTree     :: (VEB vk va k a, Functor vk) => Int -> PTree k a -> Tree vk va k a
-fromPTree h t = Tree (fromPTree' h t) 0
+fromPTree   :: (VEB vk va k a, Functor vk) => PTree k a -> Tree vk va k a
+fromPTree t = fromPTreeWithHeight (height t) t
+
+fromPTreeWithHeight     :: (VEB vk va k a, Functor vk) => Int -> PTree k a -> Tree vk va k a
+fromPTreeWithHeight h t = Tree (fromPTree' h t) 0
 
 data SP a b = SP !a !b deriving (Functor)
 
-fromPTree'                :: forall (vk :: * -> *) va k a. (VEB vk va k a, Functor vk)
-                          => Int -> PTree k a -> VEBTree vk va k a
+data Acc vk va k a = Acc { _deltaK  :: {-# UNPACK #-} !Int
+                         , _deltaA  :: {-# UNPACK #-} !Int
+                         , _bottoms :: !(DList.DList (VEBTree vk va k a))
+                         }
+
+fromPTree'                :: forall vk va k a. (VEB vk va k a, Functor vk)
+                          => Int -- ^ the height of the tree
+                          -> PTree k a
+                          -> VEBTree vk va k a
 fromPTree' _ (PLeaf (k,x)) = vebSingleton k x
-fromPTree' h t             = combine top bottoms
+fromPTree' h t             = combine top (DList.toList bottoms)
   where
     ht = (h + 1) `div` 2
     hb = h - ht
@@ -160,39 +187,72 @@ fromPTree' h t             = combine top bottoms
     -- size of the bottom trees
     bs = size hb
 
-    top = undefined
-    bottoms = undefined
--- -- mapLeavesWith   :: (acc -> a -> SP acc b) -> acc -> PTree k a -> SP acc (PTree k b)
+    -- | Transform the top tree
+    top = fromPTree' ht top'
 
-    proxyK :: Proxy k
-    proxyK = Proxy
+    -- computes the new indices at which the bottom trees will start;
+    -- this information will now be stored in leaves. Simultaneously,
+    -- collect the bottom trees
+    SP (Acc _ _ bottoms) top' = mapLeavesWith (embed bs hb) (Acc ts 0 DList.empty) t'
+    -- note that we shift the keys by ts; the number of keys in the
+    -- top tree, and the data by 0; since once we embed the top tree,
+    -- it does not actually have any data anymore.
 
-    proxyVK :: Proxy vk
-    proxyVK = Proxy
+foo' = foo (height testPTree) testPTree
 
---     top     :: VEB vk U.Vector k Int => VEBTree vk U.Vector k Int
---     top     = fromPTree' ht top'
+foo     :: Int -- ^ the height of the tree
+        -> PTree Int Int
+        -> VEBTree V.Vector V.Vector Int Int
+foo h t = top  --combine top (DList.toList bottoms)
+  where
+    ht = (h + 1) `div` 2
+    hb = h - ht
 
---     bottoms :: [VEBTree vk va k a]
---     bottoms = DList.toList $ bottoms'
+    t' = splitAtDepth ht t
 
---     top' :: PTree k Int
-    -- bottoms' :: DList.DList (VEBTree vk va k a)
-    SP (SP _ bottoms') top' = mapLeavesWith (embed bs hb proxyK proxyVK) (SP ts DList.empty) t'
+    -- The number of internal nodes in the top tree; note that all
+    -- leaves in the top tree do not need their own VNode, since they
+    -- actually correspond with the roots of the bottom trees.
+    ts = size (ht -1)
+
+    -- size of the bottom trees
+    bs = size hb
+
+    -- | Transform the top tree
+    top = foo ht top'
+
+    -- computes the new indices at which the bottom trees will start;
+    -- this information will now be stored in leaves. Simultaneously,
+    -- collect the bottom trees
+
+    acc0 :: Acc V.Vector V.Vector Int Int
+    acc0 = Acc ts 0 DList.empty
+
+    SP (Acc _ _ bottoms) top' = mapLeavesWith (embed bs hb) acc0 t'
+    -- note that we shift the keys by ts; the number of keys in the
+    -- top tree, and the data by 0; since once we embed the top tree,
+    -- it does not actually have any data anymore.
 
 
+
+
+
+
+
+
+
+
+-- | Embeds a bottom tree.
 embed                   :: forall (vk :: * -> *) va (k :: *) a. (VEB vk va k a, Functor vk)
-                        => Int
-                        -> Int
-                        -> Proxy k
-                        -> Proxy vk
-                        -> SP Int (DList.DList (VEBTree vk va k a))
+                        => Int -- ^ size of a bottom tree
+                        -> Int -- ^ height of a bottom tree
+                        -> Acc vk va k a -- ^ accumulator
                         -> PTree k a
-                        -> SP (SP Int (DList.DList (VEBTree vk va k a))) Int
-embed bs hb _ _ (SP delta bss) bt = SP acc delta
+                        -> SP (Acc vk va k a) Int
+embed bs hb (Acc deltaK deltaA bss) bt = SP acc deltaK
       where
-        acc = SP (delta+bs) (bss `DList.snoc` bt')
-        bt' = shift delta delta $ fromPTree' hb bt
+        acc = Acc (deltaK+bs) (deltaA+bs) (bss `DList.snoc` bt')
+        bt' = shift deltaK deltaA $ fromPTree' hb bt
 
 -- | Ditch the leaves of the top tree and combine into a single VEBTree
 combine       :: (VEB vk va k a, Functor vk)
@@ -200,7 +260,7 @@ combine       :: (VEB vk va k a, Functor vk)
 combine t bts = VEBTree (GV.concat $ topKeys t : map _keys bts)
                         (GV.concat $ map _values bts)
 
--- | Replace the Keys in the laves of the top tree by the values
+-- | Replace the Keys in the leaves of the top tree by the values
 topKeys                   :: (Vector vk (VNode k))
                           => VEBTree vk U.Vector k Int -> vk (VNode k)
 topKeys t@(VEBTree ks vs) = GV.imapMaybe f ks
@@ -214,19 +274,16 @@ topKeys t@(VEBTree ks vs) = GV.imapMaybe f ks
                Leaf _ j   -> j
                Node _ _ _ -> i
 
-
-
-
-
-
-
 class Shiftable t where
-  shift :: Int -> Int -> t -> t
+  shift :: Int -- ^ the delta to shift the key indices with
+        -> Int -- ^ the delta to shift the values indices with
+        -> t -> t
 
 instance Shiftable (VNode k) where
   shift deltaK deltaA = \case
       VLeaf k i   -> VLeaf k (i+deltaA)
       VNode l k r -> VNode (l+deltaK) k (r+deltaK)
+
 instance (Functor vk, Vector vk (VNode k)) => Shiftable (VEBTree vk va k a) where
   shift deltaK deltaA (VEBTree ks vs) = VEBTree (shift deltaK deltaA <$> ks) vs
 instance (Functor vk, Vector vk (VNode k)) => Shiftable (Tree vk va k a) where
@@ -263,4 +320,7 @@ size n = 2*n - 1
 
 --------------------------------------------------------------------------------
 
-testPTree = pTreeFromList [(1,1),(2,2),(3,3),(5,5)]
+testPTree = pTreeFromList [(1,1),(2,2)] --,(3,3),(5,5)]
+
+test :: Tree V.Vector V.Vector Int Int
+test = fromPTree testPTree
