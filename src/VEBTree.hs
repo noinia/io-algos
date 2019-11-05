@@ -1,6 +1,3 @@
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-
 module VEBTree where
 
 import           BinarySearch
@@ -13,10 +10,12 @@ import qualified Data.Vector as V
 import           Data.Vector.Generic (Vector, (!))
 import qualified Data.Vector.Generic as GV
 import qualified Data.Vector.Unboxed as U
+-- import           GHC.Exts (Int(..))
+-- import           GHC.Integer.Logarithms (integerLog2#)
 import qualified Merge
 import           Prelude hiding (lookup)
 
-import Debug.Trace
+import           Debug.Trace
 
 --------------------------------------------------------------------------------
 -- * Pointer based trees
@@ -50,7 +49,7 @@ pTreeFromList' n xs        = let h             = n `div` 2
                                  ((l,k),(r,m)) = both (pTreeFromList' h) $ splitAt h xs
                              in (PNode l k r, m)
 
-lookupGE q = go
+pLookupGE q = go
   where
     go = \case
       PLeaf t@(k,_) | q <= k    -> Just t
@@ -178,19 +177,23 @@ data GAcc a = Acc { _deltaK  :: {-# UNPACK #-} !Int
 type Acc vk va k a = GAcc (DList.DList (VEBTree vk va k a))
 
 
+-- FIXME:
+-- hmm, this still seems to have running time: O(n log log n), since I
+-- think we may have to concat the arrays at every level of recursion.
+-- That is still not very nice.
 fromPTree'                :: forall vk va k a. (VEB vk va k a, Functor vk
                                                , Show a, Show k
                                                )
                           => Int -- ^ the height of the tree
                           -> PTree k a
                           -> VEBTree vk va k a
-fromPTree' h t | h /= (height t) = error $ "fromPTree' wrong height: " <> show (h,t)
+-- fromPTree' h t | h /= (height t) = error $ "fromPTree' wrong height: " <> show (h,t)
 fromPTree' _ (PLeaf (k,x))                         = vebSingleton k x
 fromPTree' _ (PNode (PLeaf (l,x)) k (PLeaf (r,y))) = VEBTree ks vs
   where
     ks = GV.fromList [VNode 1 k 2, VLeaf l 0, VLeaf r 1]
     vs = GV.fromList [x,y]
-fromPTree' h t | traceShow ("fromPTree'", h,t) False = undefined
+-- fromPTree' h t | traceShow ("fromPTree'", h,t) False = undefined
 fromPTree' h t                                     = combine top (DList.toList bottoms)
   where
     ht = (h + 1) `div` 2
@@ -222,72 +225,15 @@ fromPTree' h t                                     = combine top (DList.toList b
     -- top tree, and the data by 0; since once we embed the top tree,
     -- it does not actually have any data anymore.
 
--- foo' = foo (height testPTree) testPTree
-
--- foo     :: Int -- ^ the height of the tree
---         -> PTree Int Int
---         -> VEBTree V.Vector V.Vector Int Int
--- -- foo h t | traceShow (h,t) False = undefined
--- foo _ (PLeaf (k,x)) = vebSingleton k x
--- foo h t | h /= (height t) = error $ "foo wrong height: " <> show (h,t)
--- foo _ (PNode (PLeaf (l,x)) k (PLeaf (r,y))) = VEBTree ks vs
---   where
---     ks = GV.fromList [VNode 1 k 2, VLeaf l 0, VLeaf r 1]
---     vs = GV.fromList [x,y]
--- foo h t = top  --combine top (DList.toList bottoms)
---   where
---     ht = (h + 1) `div` 2
---     hb = h - ht
-
---     t' = splitAtDepth ht t
-
---     -- The number of internal nodes in the top tree; note that all
---     -- leaves in the top tree do not need their own VNode, since they
---     -- actually correspond with the roots of the bottom trees.
---     ts = size (ht -1)
-
---     -- size of the bottom trees
---     bs = size hb
-
---     -- | Transform the top tree
---     top = foo (1+ht) (traceShowId top')
---     -- +1 for the leaves
-
---     -- TODO: I think I may have to treat size 3 trees as a base case ....
-
-
---     -- computes the new indices at which the bottom trees will start;
---     -- this information will now be stored in leaves. Simultaneously,
---     -- collect the bottom trees
-
---     acc0 :: Acc V.Vector V.Vector Int Int
---     acc0 = Acc ts 0 DList.empty
-
---     SP (Acc _ _ bottoms) top' = mapLeavesWith (embed bs hb) acc0 t'
---     -- note that we shift the keys by ts; the number of keys in the
---     -- top tree, and the data by 0; since once we embed the top tree,
---     -- it does not actually have any data anymore.
-
-
-
-
-
-
-
-
-
-
 -- | Embeds a bottom tree.
-embed                   :: forall (vk :: * -> *) va (k :: *) a. (VEB vk va k a, Functor vk
-                                                                , Show k, Show a
-                                                                )
-                        => Int -- ^ height of a bottom tree
-                        -> Acc vk va k a -- ^ accumulator
-                        -> PTree k a
-                        -> SP (Acc vk va k a) Int
-embed hb (Acc deltaK deltaA bss) bt | traceShow (hb,bt) False = undefined
-                                       -- | xs /= sizeH hb = error $ "wrong size?" <> show (xs,sizeH hb,bt)
-                                       | otherwise   = SP acc deltaK
+embed                               :: forall vk va k a. (VEB vk va k a, Functor vk
+                                                         , Show k, Show a
+                                                         )
+                                    => Int           -- ^ height of a bottom tree
+                                    -> Acc vk va k a -- ^ accumulator
+                                    -> PTree k a     -- ^ The bottom tree itself
+                                    -> SP (Acc vk va k a) Int
+embed hb (Acc deltaK deltaA bss) bt = SP acc deltaK
       where
         bs = sizeH hb
         ls = numLeaves hb -- we shift the data values by by the amount of leaves
@@ -347,14 +293,23 @@ leaves = \case
     PLeaf x     -> [x]
     PNode l _ r -> leaves l <> leaves r
 
+--------------------------------------------------------------------------------
 
 
-
+lookupGE q = go
+  where
+    go = \case
+      Leaf k x | q <= k    -> Just (k,x)
+               | otherwise -> Nothing
+      Node l k r           -> case q `compare` k of
+                                LT -> go l <|> go r
+                                EQ -> go l <|> go r
+                                GT -> go r
 
 --------------------------------------------------------------------------------
 
-lg :: Int -> Int
-lg = ceiling . logBase 2 . fromIntegral
+-- lg   :: Int -> Int
+-- lg i = I# (integerLog2# (fromIntegral i))
 
 -- | size of a tree with n leaves
 size n = 2*n - 1
