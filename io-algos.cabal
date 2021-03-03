@@ -34,14 +34,15 @@ library
   hs-source-dirs:
       src
   build-depends:
-                base            >=4.7 && <5
-              , containers      >= 0.6
-              , streamly        >= 0.6.1
-              , vector          >= 0.12
-              , random          >= 1.1
-              , unpacked-maybe  >= 0.1.0.0
-              , primitive       >= 0.6.4.0
-              , dlist           >= 0.8
+                    base            >=4.7 && <5
+                , containers      >= 0.6
+                , dlist           >= 0.8
+                , mtl >= 2.2.2
+                , primitive       >= 0.6.4.0
+                , random          >= 1.1
+                , streamly        >= 0.6.1
+                , unpacked-maybe  >= 0.1.0.0
+                , vector          >= 0.12
               -- , integer-gmp     >= 1.0.2.0
 
   default-language: Haskell2010
