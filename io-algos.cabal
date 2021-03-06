@@ -82,7 +82,7 @@ executable io-algos-exe
     , io-algos
   default-language: Haskell2010
 
-test-suite io-algos-test
+test-suite io-algos-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
@@ -94,3 +94,39 @@ test-suite io-algos-test
       base >=4.7 && <5
     , io-algos
   default-language: Haskell2010
+
+benchmark io-algo-bench
+
+  hs-source-dirs: bench
+
+  main-is: Static.hs
+  type: exitcode-stdio-1.0
+
+  other-modules:
+
+  build-depends:
+                base                    >=4.7 && <5
+              , io-algos
+              , tasty-bench             >= 0.2
+              , vector
+              , containers
+              , hgeometry-combinatorial
+
+  ghc-options: -Wall -O2 -rtsopts -fno-warn-unticked-promoted-constructors
+
+  default-language: Haskell2010
+  default-extensions: LambdaCase
+                    , FlexibleContexts
+                    , KindSignatures
+                    , GeneralizedNewtypeDeriving
+                    , StandaloneDeriving
+                    , DeriveFunctor
+                    , DeriveFoldable
+                    , DeriveTraversable
+                    , ViewPatterns
+                    , PatternSynonyms
+                    , TupleSections
+                    , RankNTypes
+                    , ConstraintKinds
+                    , DataKinds
+                    , FlexibleInstances
