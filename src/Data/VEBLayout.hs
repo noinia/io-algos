@@ -38,8 +38,8 @@ type Index  = Word
 
 type VEBTree k v = V.Vector (VEBNode k v)
 
-data VEBNode k v = Leaf' v
-                 | Node' {-# UNPACK #-} !Index k {-# UNPACK #-} !Index
+data VEBNode k v = Leaf' !v
+                 | Node' {-# UNPACK #-} !Index !k {-# UNPACK #-} !Index
                  deriving (Show,Eq,Ord,Generic,Generic1)
 
 instance (NFData k, NFData v) => NFData (VEBNode k v) where rnf = rnf1
