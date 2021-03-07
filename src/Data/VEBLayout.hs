@@ -1,5 +1,17 @@
-module Data.VEBLayout where
+module Data.VEBLayout
+  ( VEBTree
+  , VEBNode(..)
+  , Index
+  , fromAscList
 
+  , vebLayout
+  , fromLayout
+
+  , lookup, lookupGT, lookupGE -- , lookupLT, lookupLE
+  , binarySearch
+  ) where
+
+import           Control.DeepSeq
 import           Control.Monad.State.Strict
 import           Data.Bifunctor
 import           Data.BinaryTree.LeafTree.Complete (split, lg, pow, div2, size, fullTree)
@@ -15,7 +27,10 @@ import qualified Data.List as List
 import           Data.Maybe
 import qualified Data.Vector as V
 import           Debug.Trace
-import           GHC.Stack
+import           GHC.Generics
+import           Prelude hiding (lookup)
+
+import           System.Random (randomIO)
 
 --------------------------------------------------------------------------------
 
@@ -25,7 +40,11 @@ type VEBTree k v = V.Vector (VEBNode k v)
 
 data VEBNode k v = Leaf' v
                  | Node' {-# UNPACK #-} !Index k {-# UNPACK #-} !Index
-                 deriving (Show,Eq,Ord)
+                 deriving (Show,Eq,Ord,Generic,Generic1)
+
+instance (NFData k, NFData v) => NFData (VEBNode k v) where rnf = rnf1
+instance NFData k => NFData1 (VEBNode k)
+
 
 vebLayout   :: Tree k v -> VEBTree k v
 vebLayout t = V.fromList $ vebLayout' 0 t (height t)
@@ -73,9 +92,6 @@ fromLayout t = fromLayout' 0 t h
     n = V.length t
     h = lg n
 
-
-
-
 extractLeaf = \case
   Leaf' v -> Just v
   _       -> Nothing
@@ -117,15 +133,46 @@ showVEB  = showByLevels $ fromLayout . vebLayout
 
 --------------------------------------------------------------------------------
 
-fromAscList :: [v] -> VEBTree (Maybe v) (Maybe v)
+fromAscList :: [(k,v)] -> VEBTree (Maybe k) (Maybe (k,v))
 fromAscList = vebLayout . Complete.fromAscList
 
--- |
-binarySearch    :: (k -> Bool) -> VEBTree k v -> v
-binarySearch p = Tree.binarySearch p . fromLayout
-
+binarySearch     :: (k -> Bool) -> VEBTree k (k,v) -> Maybe (k,v)
+binarySearch p t = let lf@(k,_) = Tree.binarySearchLeaf p $ fromLayout t
+                   in if p k then Just lf else Nothing
 
 -- testT :: Tree Int Int
-testT = fromAscList [0,1,2,3,4,5,6,7]
+testT = fromAscList $ map (\x -> (x,x)) [0,1,2,3,4,5,6,7]
 
-testQ = binarySearch (> Just 5) testT -- successor query
+--------------------------------------------------------------------------------
+
+lookup   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe v
+lookup q = fmap snd . lookup' (== Just q)
+
+lookupGT   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
+lookupGT q = lookup' (> Just q)
+
+lookupGE   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
+lookupGE q = lookup' (>= Just q)
+
+
+
+-- lookupLT   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
+-- lookupLT q = lookup' (< Just q)
+
+-- lookupLE   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
+-- lookupLE q = lookup' (<= Just q)
+
+
+
+
+
+lookup'     :: (Maybe k -> Bool) -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
+lookup' p t = let lf = Tree.binarySearchLeaf p $ fromLayout t
+              in if p (fst <$> lf) then lf else Nothing
+
+--------------------------------------------------------------------------------
+
+genInput   :: Int -> IO [Int]
+genInput n = replicateM n randomIO
+
+testTT = fromAscList . map (\x -> (x,x)) <$> genInput 14

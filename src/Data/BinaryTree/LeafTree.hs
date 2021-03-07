@@ -45,7 +45,7 @@ myFullTree = Node (Node (Leaf "a") "x" (Leaf "b"))
 myTree1 = Node (Leaf "l") "v" (Leaf "r")
 
 
--- testT :: Tree Int Int
-testT = fromAscList [0,1,2,3,4,5,6,7]
+-- -- testT :: Tree Int Int
+-- testT = fromAscList [0,1,2,3,4,5,6,7]
 
-testQ = binarySearch (> Just 5) testT -- successor query
+-- testQ = binarySearch (> Just 5) testT -- successor query

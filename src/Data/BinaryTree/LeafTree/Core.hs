@@ -22,6 +22,7 @@ module Data.BinaryTree.LeafTree.Core
   , levels
 
   , binarySearch
+  , binarySearchLeaf
   ) where
 
 import           Control.Monad.State.Strict
@@ -92,9 +93,15 @@ levels t = [t] : case t of
 --------------------------------------------------------------------------------
 
 
+-- | Version of binary search that also actually checks the leaf that
+-- we obtain
+binarySearch     :: (k -> Bool) -> Tree k k -> Maybe k
+binarySearch p t = let v = binarySearchLeaf p t
+                   in if p v then Just v else Nothing
+
 -- | If we satisfy the predicate, go left, otherwise go right.
-binarySearch   :: (k -> Bool) -> Tree k v -> v
-binarySearch p = go
+binarySearchLeaf   :: (k -> Bool) -> Tree k v -> v
+binarySearchLeaf p = go
   where
     go = \case
       Leaf v                 -> v

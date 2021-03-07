@@ -1,20 +1,70 @@
-module Static where
+module Main where
 
+import           Control.Monad
+import qualified Data.IntMap as IntMap
+import qualified Data.List as List
+import qualified Data.Map as Map
 import qualified Data.VEBLayout as VEB
-import           Test.Tasty.Bench
+import           System.Random
+import           Criterion.Main
 
 --------------------------------------------------------------------------------
 
--- benchmark searches static trees
+randomIOs   :: Random a => Int -> IO [a]
+randomIOs n = replicateM n randomIO
 
-fibo :: Int -> Integer
-fibo n = if n < 2 then toInteger n else fibo (n - 1) + fibo (n - 2)
+genKeys   :: Int -> IO [Int]
+genKeys n = List.sort <$> randomIOs n
+
+genInput   :: Int -> IO [(Int,Int)]
+genInput n = map (\k -> (k,k)) <$> genKeys n
+
+-- benchmark searches static trees
 
 main :: IO ()
 main = defaultMain
-  [ bgroup "fibonacci numbers"
-    [ bench "fifth"     $ nf fibo  5
-    , bench "tenth"     $ nf fibo 10
-    , bench "twentieth" $ nf fibo 20
-    ]
+  [ build 1000
+  , runQueries 1000 2000
   ]
+
+build   :: Int -> Benchmark
+build n = env (genInput n) $ \xs ->
+            bgroup ("building a tree of size " <> show n) $
+              [ bench "VEBLayout"  $ nf VEB.fromAscList    xs
+              , bench "Map"        $ nf Map.fromAscList    xs
+              , bench "IntMap"     $ nf IntMap.fromAscList xs
+              ]
+
+
+preprocess n m = do xs <- genInput n
+                    qs <- randomIOs m
+                    print "woei"
+                    print qs
+                    pure $ ( VEB.fromAscList xs
+                           , Map.fromAscList xs
+                           , IntMap.fromAscList xs
+                           , qs
+                           )
+
+
+runAllQueries     :: (Int -> Maybe (Int,Int)) -> [Int] -> Int
+runAllQueries qry = List.foldl' (\a q -> case qry q of
+                                           Nothing    -> a
+                                           Just (_,v) -> a + v
+                                ) 0
+
+
+
+
+
+runQueries     :: Int -- ^ input size
+               -> Int -- ^ Number of queries
+               -> Benchmark
+runQueries n m = env (preprocess n m) $ \(vebT, map', intMap, qs) ->
+                   bgroup ("querying " <> show m <> " queries on size " <> show n)
+                     [ bench "VEBLayout"  $ nf (query VEB.lookupGE vebT)      qs
+                     , bench "Map"        $ nf (query Map.lookupGE map')      qs
+                     , bench "IntMap"     $ nf (query IntMap.lookupGE intMap) qs
+                     ]
+  where
+    query f t = runAllQueries (flip f t)

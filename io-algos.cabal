@@ -1,19 +1,12 @@
 cabal-version: 1.12
-
--- This file has been generated from package.yaml by hpack version 0.31.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: 14da046e8ce6da1296988cc8da897b76f2bfd301bea31f4bee6b71af65457076
-
 name:           io-algos
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/io-algos#readme>
-homepage:       https://github.com/githubuser/io-algos#readme
-bug-reports:    https://github.com/githubuser/io-algos/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2019 Author name here
+description:    Please see the README on GitHub at <https://github.com/noinia/io-algos>
+homepage:       https://github.com/noinia/io-algos
+bug-reports:    https://github.com/noinia/io-algos/issues
+author:         Frank Staals
+maintainer:     frank@fstaals.net
+copyright:      2019 Frank Staals
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -23,11 +16,11 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/io-algos
+  location: https://github.com/noinia/io-algos
 
 library
   exposed-modules:
-                  Lib
+                  -- Lib
                   BinarySearch
                   Data.VEBLayout
                   Data.BinaryTree.LeafTree
@@ -38,19 +31,21 @@ library
   hs-source-dirs:
       src
   build-depends:
-                  base            >=4.7 && <5
-                , containers      >= 0.6
-                , deepseq >= 1.4.4.0
-                , dlist           >= 0.8
+                  base                    >=4.7 && <5
+                , containers              >= 0.6
+                , deepseq                 >= 1.4.4.0
+                , dlist                   >= 0.8
                 , hgeometry-combinatorial >= 0.11.0.0
-                , mtl >= 2.2.2
-                , primitive       >= 0.6.4.0
-                , random          >= 1.1
-                , semigroupoids >= 5.3.5
-                , streamly        >= 0.6.1
-                , unpacked-maybe  >= 0.1.0.0
-                , vector          >= 0.12
-              -- , integer-gmp     >= 1.0.2.0
+                , mtl                     >= 2.2.2
+                , primitive               >= 0.6.4.0
+                , random                  >= 1.1
+                , semigroupoids           >= 5.3.5
+                , streamly                >= 0.6.1
+                , unpacked-maybe          >= 0.1.0.0
+                , vector                  >= 0.12
+              -- , integer-gmp            >= 1.0.2.0
+
+                , tasty-bench >= 0.2.2
 
   default-language: Haskell2010
   default-extensions: LambdaCase
@@ -61,6 +56,7 @@ library
                     , DeriveFunctor
                     , DeriveFoldable
                     , DeriveTraversable
+                    , DeriveGeneric
                     , ViewPatterns
                     , PatternSynonyms
                     , TupleSections
@@ -107,7 +103,9 @@ benchmark io-algo-bench
   build-depends:
                 base                    >=4.7 && <5
               , io-algos
-              , tasty-bench             >= 0.2
+              , criterion               >= 1.5.9
+              -- , tasty-bench             >= 0.2
+              , random                  >= 1.2
               , vector
               , containers
               , hgeometry-combinatorial
@@ -130,3 +128,4 @@ benchmark io-algo-bench
                     , ConstraintKinds
                     , DataKinds
                     , FlexibleInstances
+                    , DeriveGeneric
