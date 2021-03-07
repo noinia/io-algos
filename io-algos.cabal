@@ -43,6 +43,7 @@ library
                 -- , streamly                >= 0.6.1
                 , unpacked-maybe          >= 0.1.0.0
                 , vector                  >= 0.12
+                , integer-logarithms      >= 1.0
               -- , integer-gmp            >= 1.0.2.0
 
                 -- , tasty-bench >= 0.2.2
@@ -99,7 +100,7 @@ benchmark io-algo-bench
   type: exitcode-stdio-1.0
 
   other-modules: VEBBaseline
-
+               , SortedVec
   build-depends:
                 base                    >=4.7 && <5
               , io-algos

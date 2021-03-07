@@ -36,7 +36,7 @@ import           GHC.Stack
 
 --------------------------------------------------------------------------------
 
-type Height = Word
+type Height = Int
 
 -- | Binary tree with elements of type 'v' in the leaves and type 'k'
 -- in internal nodes.
