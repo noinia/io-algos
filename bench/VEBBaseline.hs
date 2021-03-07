@@ -1,4 +1,4 @@
-module Data.VEBLayout
+module VEBBaseline
   ( VEBTree
   , VEBNode(..)
   , Index
