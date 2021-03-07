@@ -8,7 +8,7 @@ module Data.VEBLayout
   , fromLayout
 
   , lookup, lookupGT, lookupGE -- , lookupLT, lookupLE
-  , binarySearch
+  , searchLeafR
   ) where
 
 import           Control.DeepSeq
@@ -109,9 +109,23 @@ fromLayout' s xs h | h == 0    = let Leaf' v = xs V.! (fromIntegral s)
                    | otherwise = let Node' li k ri = xs V.! (fromIntegral s)
                                  in Node (fromLayout' li xs (h-1)) k (fromLayout' ri xs (h-1))
 
-searchLeafR :: (k -> Bool) -> VEBTree k v -> Maybe (k,v)
-searchLeafR = undefined
 
+-- | Binary-search on a tree. the predicate indicates if we should go right
+searchLeafR           :: (k -> Bool) -> VEBTree k v -> v
+searchLeafR goRight t = searchLeafR' goRight 0 t h
+  where
+    n = V.length t
+    h = lg n
+
+-- | implementation of the binary search
+searchLeafR' :: (k -> Bool) -> Index -> VEBTree k v -> Height -> v
+searchLeafR' goRight = f
+  where
+    f s t h | h == 0    = let Leaf' lf = t V.! (fromIntegral s)
+                          in lf
+            | otherwise = let Node' li k ri = t V.! (fromIntegral s)
+                              h'            = h - 1
+                          in if goRight k then f ri t h' else f li t h'
 
 --------------------------------------------------------------------------------
 
@@ -140,10 +154,6 @@ showVEB  = showByLevels $ fromLayout . vebLayout
 fromAscList :: [(k,v)] -> VEBTree (Maybe k) (Maybe (k,v))
 fromAscList = vebLayout . Complete.fromAscList
 
-binarySearch     :: (k -> Bool) -> VEBTree k (k,v) -> Maybe (k,v)
-binarySearch p t = let lf@(k,_) = Tree.binarySearchLeaf p $ fromLayout t
-                   in if p k then Just lf else Nothing
-
 -- testT :: Tree Int Int
 testT = fromAscList $ map (\x -> (x,x)) [0,1,2,3,4,5,6,7]
 
@@ -171,7 +181,7 @@ lookupGE q = lookup' (>= Just q)
 
 
 lookup'     :: (Maybe k -> Bool) -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
-lookup' p t = let lf = Tree.binarySearchLeaf p $ fromLayout t
+lookup' p t = let lf = searchLeafR p t
               in if p (fst <$> lf) then lf else Nothing
 
 --------------------------------------------------------------------------------
