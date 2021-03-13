@@ -11,7 +11,7 @@
 --------------------------------------------------------------------------------
 module Data.BinaryTree.LeafTree.Complete
   ( fullTree
-
+  , height
 
   , fromAscList
   , fromAscList2
@@ -25,7 +25,7 @@ module Data.BinaryTree.LeafTree.Complete
 
 import           Control.Monad.State.Strict
 import           Data.Bifunctor
-import           Data.BinaryTree.LeafTree.Core
+import           Data.BinaryTree.LeafTree.Core hiding (height)
 import           Data.Bits
 import qualified Data.List as List
 import           Data.Maybe
@@ -34,6 +34,15 @@ import           Debug.Trace
 import           GHC.Stack
 
 --------------------------------------------------------------------------------
+
+-- | computes the height of the complete tree
+height :: Tree k v -> Height
+height = go
+  where
+    go = \case
+      Leaf _     -> 0
+      Node l _ _ -> 1 + go l
+         -- since the tree is a complete tree we can always just go left
 
 fullTree                 :: Num i => i -> Height -> Tree i i
 fullTree s h | h == 0    = Leaf s

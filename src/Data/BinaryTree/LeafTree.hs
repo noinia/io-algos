@@ -29,7 +29,7 @@ module Data.BinaryTree.LeafTree
   ) where
 
 import Data.BinaryTree.LeafTree.Core
-import Data.BinaryTree.LeafTree.Complete
+import Data.BinaryTree.LeafTree.Complete hiding (height)
 
 --------------------------------------------------------------------------------
 

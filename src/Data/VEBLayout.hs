@@ -17,12 +17,11 @@ import           Data.Bifunctor
 import           Data.BinaryTree.LeafTree.Complete (split, lg, pow, div2, size, fullTree)
 import qualified Data.BinaryTree.LeafTree.Complete as Complete
 import           Data.BinaryTree.LeafTree.Core ( Tree(..)
-                                               , Height, height
+                                               , Height
                                                , foldTree, traversePrefix
                                                , labelLeaves
                                                )
 import qualified Data.BinaryTree.LeafTree.Core as Tree
-import           Data.Bits
 import qualified Data.List as List
 import           Data.Maybe
 import qualified Data.Vector as V
@@ -45,9 +44,9 @@ data VEBNode k v = Leaf' !v
 instance (NFData k, NFData v) => NFData (VEBNode k v) where rnf = rnf1
 instance NFData k => NFData1 (VEBNode k)
 
-
+-- | pre: input is a complete tree
 vebLayout   :: Tree k v -> VEBTree k v
-vebLayout t = V.fromList $ vebLayout' 0 t (height t)
+vebLayout t = V.fromList $ vebLayout' 0 t (Complete.height t)
 
 vebLayout'                   :: Index        -- ^ starting index
                              -> Tree k v
@@ -95,6 +94,207 @@ fromLayout t = fromLayout' 0 t h
 extractLeaf = \case
   Leaf' v -> Just v
   _       -> Nothing
+
+
+--------------------------------------------------------------------------------
+
+shift       :: Index -> [VEBNode k v] -> [VEBNode k v]
+shift delta = map (\case
+                      Node' l k r -> Node' (l + delta) k (r + delta)
+                      lf          -> lf
+                  )
+
+
+
+
+
+
+
+baseCase   :: (v -> v -> k) -> [v] -> [VEBNode k v]
+baseCase f = concat
+           . zipWith (\i [l,r] -> [Node' (3*i+1) (f l r) (3*i+2), Leaf' l, Leaf' r]
+                     ) [0..]
+           . chunksOf 2
+
+-- -- | pre; input is of size 2^h
+-- bottomUp     :: (v -> k) -> (k -> k -> k) -> [v] -> [VEBNode k v]
+-- bottomUp f m = repeatedly combine . map Leaf'
+--   where
+--     combine         :: [[VEBNode k v]] -> [VEBNode k v]
+--     combine bottoms = zipWith (\i (b:_) -> case b of
+--                                              Leaf' _ ->
+
+--                                  ) [0..] bottoms
+
+-- mkVEB :: [k] -> [VEB k]
+-- mkVEB = repeatedly (\xs -> ND (length xs) xs) . map LF
+
+
+-- combine                       :: Height -- ^ height of the top tree
+--                               -> Height -- ^ height of the bottom trees
+--                               -> [(Index,k)] -- ^  bottom trees
+--                               -> (k, [VEBNode k v]) -- ^ key to use for the next round
+--                                                     -- as well as the nodes for the top tree
+-- combine th bh bottoms@((_,m)) = (m,ys)
+--   where
+--     vals = zipWith (\i [(li,_),(ri,kr)] -> Node' li kr ri
+--                    ) .chunksOf 2 $ bottoms
+
+
+-- data Chunk k v = Chunk { delta :: Index -- offset to apply to all elements in this list
+--                        ,
+--                        }
+
+-- bottomUp :: Height -> -- height of the trees we have so far
+--          -> [[VEBNode k v]] -- the bottom trees so far
+--          -> []
+
+
+
+data VEB k v = LF !v
+             | ND {-# UNPACK #-} !Height
+                                 [(k,VEB k v)]
+             deriving (Show,Eq)
+
+mkVEB   :: (v -> k) -> [v] -> VEB k v
+mkVEB f = snd . bottomUp (\v -> (f v, LF v)) (\h _ chs@((k,_):_) -> (k, ND h chs))
+
+-- levelsOf :: VEB k v -> [[k]]
+-- levelsOf = \case
+--   LF _ -> [[]]
+--   ND _ chs -> map fst chs : flatten $ map (levelsOf . snd) chs
+--   where
+--     -- flatten :: [ [[k]] ] -> [[k]]
+--     flatten = foldr1 (zipWith (<>))
+
+type Size = Int
+
+bottomUp               :: (v -> b)
+                       -> (Height -> Size -> [b] -> b)
+                       -- ^ height of the children, number of children, result from children
+                       -> [v] -> b
+bottomUp mkLeaf mkNode = go 1 2 . baseCase . map mkLeaf
+  where
+    -- go     :: Height -> Size -> [b] -> b
+    go h n = \case
+               [x] -> x
+               xs  -> let h'     = 2*h
+                          n'     = n*n
+                          chunks = chunksOf n xs
+                      in go h' n' (map (mkNode h n) chunks)
+
+    baseCase = \case
+      xs@[_] -> xs
+      xs     -> map (mkNode 0 2) . chunksOf 2 $ xs
+
+data VEBL k v = LF' !v
+              | ND' !Height (VEBL k k) [(k,VEBL k v)]
+              deriving (Show,Eq)
+
+layout   :: (v -> k) -> [v] -> VEBL k v
+layout f = snd . bottomUp (\v -> (f v,LF' v))
+                          (\h n chs -> case h of
+                            0 -> let [(m,_),(k,_)] = chs
+                                 in (m, ND' 0 (LF' k) chs)
+                            _ -> let top               = layout id bottomRoots
+                                     bottomRoots@(m:_) = map fst chs
+                                 in (m, ND' h top chs)
+                          )
+
+size' = undefined
+
+-- layout'   :: Index -> VEBL k v -> [VEBNode k v]
+-- layout' s = \case
+--     LF' v                         -> [Leaf' v]
+--     ND' 0 _ [(_,LF' l),(k,LF' r)] -> [ Node' (s+1) k (s+2), Leaf' l, Leaf' r]
+--     ND' hb _ chs                  -> let st        = size' top
+--                                          sb        = size hb
+--                                          bottomIds = mkTop s sb chs
+--                                          top       = layout fst bottomIds
+--                                          bottoms   = concat $ zipWith f [0..] chs
+--                                          f i (_,b) = layout' (s + st + i*sb) b
+--                                      in layout' s top <> bottoms
+
+mkTop      :: Index -> Index -> [(k, b)] -> [(k, VEBNode k v)]
+mkTop s sb = zipWith (\i [(m,l),(k,r)] -> let li = s+i*2*sb
+                                              ri = li + sb
+                                          in (m,Node' li k ri)
+                     ) [0..] . chunksOf 2
+
+
+
+
+
+-- -- | pre; input is of size 2^h
+-- repeatedly   :: (Height -> Int -> [a] -> a)
+--              -> [a] -> [a]
+-- repeatedly f = go 1 2 []
+--   where
+--     go h n acc = \case
+--                    [x] -> x:acc
+--                    xs  -> let h'     = 2*h -- height of the tree to construct doubles
+--                               n'     = n*n -- number of children squares
+--                               chunks = chunksOf n xs
+--                           in go h' n' (xs <> acc) (map (f h n) chunks)
+
+
+
+
+
+-- -- | pre; input is of size 2^h
+-- repeatedly   :: (Height -> Int -> [a] -> a)
+--              -> [a] -> [a]
+-- repeatedly f = go 1 2 []
+--   where
+--     go h n acc = \case
+--                    [x] -> x:acc
+--                    xs  -> let h'     = 2*h -- height of the tree to construct doubles
+--                               n'     = n*n -- number of children squares
+--                               chunks = chunksOf n xs
+--                           in go h' n' (xs <> acc) (map (f h n) chunks)
+
+-- embed :: VEB v -> [Node' () v]
+-- embed = go
+--   where
+--     go = \case
+--       LF v     -> [Leaf' v]
+--       ND h chs -> let (ND bh _:_) = chs
+--                       s   = size th
+--                       top = []
+--                   in top <> zipWith (\i (ND bh ch) -> Node' (s + i*2*s) () (i*2*s+s)
+-- )
+--                      [0..] chs
+
+
+-- -- | pre; input is of size 2^h
+-- repeatedly   :: (Height -> Int -> [a] -> a)
+--              -> [a] -> [a]
+-- repeatedly f = go 0 1 []
+--   where
+--     go h n acc = \case
+--                    [x] -> x:acc
+--                    xs  -> let h'     = 2*h -- height of the tree to construct doubles
+--                               n'     = n*n -- number of children squares
+--                               chunks = chunksOf n' xs
+--                           in go h' n' (xs <> acc) (map (f h n) chunks)
+
+
+
+chunksOf   :: Int -> [a] -> [[a]]
+chunksOf n = go
+  where
+    go xs = case List.splitAt n xs of
+              (ys,[])   -> [ys]
+              (ys,rest) -> ys: go rest
+
+
+-- layoutOnly                :: [v] -> Height -> [VEBNode Int Int]
+-- layoutOnly xs h = case h of
+--                      0 -> let (x:_) = xs in [Leaf' x]
+--                      1 -> let l =
+
+--                        [Node' 0 1 ]
+
 
 
 --------------------------------------------------------------------------------

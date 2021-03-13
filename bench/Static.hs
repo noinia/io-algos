@@ -2,6 +2,7 @@ module Main where
 
 import           Control.Monad
 import           Criterion.Main
+import           Criterion.Types(reportFile)
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -24,19 +25,23 @@ genInput n = map (\k -> (k,k)) <$> genKeys n
 -- benchmark searches static trees
 
 main :: IO ()
-main = defaultMain
-  [ build 1000
-  , runQueries 1000 2000
-  ]
+main = defaultMainWith config
+    [ bgroup "Building " $ map build sizes
+    , bgroup "Querying"  $ map (\n -> runQueries n (2*n)) sizes
+    ]
+  where
+    sizes = map round $ [1e3, 1e4, 1e5]
+    config = defaultConfig { reportFile = Just "io-algo-bench-report.html" }
+
 
 build   :: Int -> Benchmark
 build n = env (genInput n) $ \xs ->
             bgroup ("building a tree of size " <> show n) $
               [ bench "VEBLayout"    $ nf VEB.fromAscList    xs
-              , bench "Map"          $ nf Map.fromAscList    xs
-              , bench "IntMap"       $ nf IntMap.fromAscList xs
+              -- , bench "Map"          $ nf Map.fromAscList    xs
+              -- , bench "IntMap"       $ nf IntMap.fromAscList xs
               , bench "Baseline"     $ nf Baseline.fromAscList    xs
-              , bench "SortedVec"    $ nf SortedVec.fromAscList    xs
+              -- , bench "SortedVec"    $ nf SortedVec.fromAscList    xs
               ]
 
 
@@ -69,8 +74,8 @@ runQueries n m = env (preprocess n m) $ \(~(vebT, vebB, map', intMap, sortedVec,
                      [ bench "VEBLayout"  $ nf (query VEB.lookupGE vebT)            qs
                      , bench "Map"        $ nf (query Map.lookupGE map')            qs
                      , bench "IntMap"     $ nf (query IntMap.lookupGE intMap)       qs
-                     , bench "Baseline"   $ nf (query Baseline.lookupGE vebB)       qs
-                     , bench "SortedVec"  $ nf (query SortedVec.lookupGE sortedVec) qs
+                     -- , bench "Baseline"   $ nf (query Baseline.lookupGE vebB)       qs
+                     -- , bench "SortedVec"  $ nf (query SortedVec.lookupGE sortedVec) qs
                      ]
   where
     query f t = runAllQueries (flip f t)
