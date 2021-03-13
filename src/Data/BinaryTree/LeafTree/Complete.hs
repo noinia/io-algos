@@ -48,7 +48,7 @@ fullTree                 :: Num i => i -> Height -> Tree i i
 fullTree s h | h == 0    = Leaf s
              | otherwise = let h' = h - 1
                            in Node (fullTree s h')
-                                   (s + (pow h'))
+                                   (s + pow h')
                                    (fullTree (s + pow h') h')
 
 -- | Builds a tree from the list of key,value pairs.

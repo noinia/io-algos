@@ -71,7 +71,7 @@ vebLayout' s t@(Node l k r) h = case h of
              topTree          = map extract (vebLayout' s top' ht)
 
          in topTree <> bottoms
-vebLayout' s t h = error "vebLayout': absurd" -- $ show (s,t,h)
+vebLayout' s t h = error "vebLayout': absurd" --  $ show (s,t,h)
 
 
 extract = \case
@@ -85,11 +85,8 @@ roundTrip t = fromLayout (vebLayout t) == t
 
 -- |
 -- pre: input is nonEmpty
-fromLayout   :: VEBTree k v -> Tree k v
-fromLayout t = fromLayout' 0 t h
-  where
-    n = V.length t
-    h = lg n
+fromLayout :: VEBTree k v -> Tree k v
+fromLayout = fromLayout' 0
 
 extractLeaf = \case
   Leaf' v -> Just v
@@ -173,7 +170,7 @@ bottomUp               :: (v -> b)
                        -> (Height -> Size -> [b] -> b)
                        -- ^ height of the children, number of children, result from children
                        -> [v] -> b
-bottomUp mkLeaf mkNode = go 1 2 . baseCase . map mkLeaf
+bottomUp mkLeaf mkNode = go 1 4 . baseCase . map mkLeaf
   where
     -- go     :: Height -> Size -> [b] -> b
     go h n = \case
@@ -187,33 +184,44 @@ bottomUp mkLeaf mkNode = go 1 2 . baseCase . map mkLeaf
       xs@[_] -> xs
       xs     -> map (mkNode 0 2) . chunksOf 2 $ xs
 
+layout2 :: [k] -> VEBTree k k
+layout2 = V.fromList . layout' 0 . layout id
+
 data VEBL k v = LF' !v
-              | ND' !Height (VEBL k k) [(k,VEBL k v)]
+              | ND' !Height -- height of the children
+                    [(k,VEBL k v)]
               deriving (Show,Eq)
 
 layout   :: (v -> k) -> [v] -> VEBL k v
 layout f = snd . bottomUp (\v -> (f v,LF' v))
                           (\h n chs -> case h of
-                            0 -> let [(m,_),(k,_)] = chs
-                                 in (m, ND' 0 (LF' k) chs)
-                            _ -> let top               = layout id bottomRoots
-                                     bottomRoots@(m:_) = map fst chs
-                                 in (m, ND' h top chs)
+                            0 -> let [(m,_),(_,_)] = chs
+                                 in (m, ND' 0 chs)
+                            _ -> let ((m,_):_) = chs
+                                 in (m, ND' h chs)
                           )
 
-size' = undefined
+size' = \case
+  LF' _   -> 1
+  ND' h _ -> pow (h + 2) - 1
 
--- layout'   :: Index -> VEBL k v -> [VEBNode k v]
--- layout' s = \case
---     LF' v                         -> [Leaf' v]
---     ND' 0 _ [(_,LF' l),(k,LF' r)] -> [ Node' (s+1) k (s+2), Leaf' l, Leaf' r]
---     ND' hb _ chs                  -> let st        = size' top
---                                          sb        = size hb
---                                          bottomIds = mkTop s sb chs
---                                          top       = layout fst bottomIds
---                                          bottoms   = concat $ zipWith f [0..] chs
---                                          f i (_,b) = layout' (s + st + i*sb) b
---                                      in layout' s top <> bottoms
+layout'   :: Index -> VEBL k v -> [VEBNode k v]
+layout' s = \case
+    LF' v                -> [Leaf' v]
+    ND' 0  [(_,l),(k,r)] -> [ Node' (s+1) k (s+2) ] <> layout' (s+1) l <> layout' (s+2) r
+    ND' 1  [(_,l),(k,r)] -> [ Node' (s+1) k (s+4) ] <> layout' (s+1) l <> layout' (s+4) r
+    ND' hb chs           -> let top         = layout fst bottomRoots
+                                bottomRoots = mkTop s sb chs
+                                sb          = size hb
+                                st          = size' top
+                                bottoms   = concat $ zipWith f [0..] chs
+                                f i (_,b) = layout' (s + st + i*sb) b
+                            in map cleanLeaf (layout' s top) <> bottoms
+
+
+cleanLeaf = \case
+  Leaf' (k,lf) -> lf
+  Node' l k r  -> Node' l k r
 
 mkTop      :: Index -> Index -> [(k, b)] -> [(k, VEBNode k v)]
 mkTop s sb = zipWith (\i [(m,l),(k,r)] -> let li = s+i*2*sb
@@ -287,6 +295,10 @@ chunksOf n = go
               (ys,[])   -> [ys]
               (ys,rest) -> ys: go rest
 
+chunksOf'   :: Int -> [a] -> [[a]]
+chunksOf' n = snd . foldr (\x (i,xss@(xs:yss)) -> if i == 0 then (n-1, [x]:xss)
+                                                            else (i-1, (x:xs):yss)
+                          ) (n,[[]])
 
 -- layoutOnly                :: [v] -> Height -> [VEBNode Int Int]
 -- layoutOnly xs h = case h of
@@ -302,12 +314,18 @@ chunksOf n = go
 
 -- All of this should work for any tree embedded in an array.
 
+fromLayout'      :: Index -> VEBTree k v -> Tree k v
+fromLayout' s xs = go s
+  where
+    go i = case xs V.! fromIntegral i of
+             Leaf' v       -> Leaf v
+             Node' li k ri -> Node (go li) k (go ri)
 
-fromLayout'                    :: Index -> VEBTree k v -> Height -> Tree k v
-fromLayout' s xs h | h == 0    = let Leaf' v = xs V.! (fromIntegral s)
-                                 in Leaf v
-                   | otherwise = let Node' li k ri = xs V.! (fromIntegral s)
-                                 in Node (fromLayout' li xs (h-1)) k (fromLayout' ri xs (h-1))
+-- fromLayout'                    :: Index -> VEBTree k v -> Height -> Tree k v
+-- fromLayout' s xs h | h == 0    = let Leaf' v = xs V.! (fromIntegral s)
+--                                  in Leaf v
+--                    | otherwise = let Node' li k ri = xs V.! (fromIntegral s)
+--                                  in Node (fromLayout' li xs (h-1)) k (fromLayout' ri xs (h-1))
 
 
 -- | Binary-search on a tree. the predicate indicates if we should go right
@@ -321,9 +339,9 @@ searchLeafR goRight t = searchLeafR' goRight 0 t h
 searchLeafR' :: (k -> Bool) -> Index -> VEBTree k v -> Height -> v
 searchLeafR' goRight = f
   where
-    f s t h | h == 0    = let Leaf' lf = t V.! (fromIntegral s)
+    f s t h | h == 0    = let Leaf' lf = t V.! fromIntegral s
                           in lf
-            | otherwise = let Node' li k ri = t V.! (fromIntegral s)
+            | otherwise = let Node' li k ri = t V.! fromIntegral s
                               h'            = h - 1
                           in if goRight k then f ri t h' else f li t h'
 
@@ -390,3 +408,7 @@ genInput   :: Int -> IO [Int]
 genInput n = replicateM n randomIO
 
 testTT = fromAscList . map (\x -> (x,x)) <$> genInput 14
+
+
+
+--------------------------------------------------------------------------------

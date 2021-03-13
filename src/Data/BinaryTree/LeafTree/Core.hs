@@ -23,6 +23,8 @@ module Data.BinaryTree.LeafTree.Core
 
   , binarySearch
   , binarySearchLeaf
+
+  , showByLevels, printByLevels
   ) where
 
 import           Control.Monad.State.Strict
@@ -86,9 +88,11 @@ height = foldTree (const 0) (\l _ r -> 1 + max l r)
 
 -- | Essentially a BFS traversal of the tree
 levels   :: Tree k v -> [[Tree k v]]
-levels t = [t] : case t of
-  Leaf _     -> [[]]
-  Node l _ r -> zipWith (<>) (levels l) (levels r)
+levels = init . levels'
+  where
+    levels' t = [t] : case t of
+      Leaf _     -> [[]]
+      Node l _ r -> zipWith (<>) (levels' l) (levels' r)
 
 --------------------------------------------------------------------------------
 
@@ -107,3 +111,14 @@ binarySearchLeaf p = go
       Leaf v                 -> v
       Node l k r | p k       -> go l
                  | otherwise -> go r
+
+
+--------------------------------------------------------------------------------
+
+showByLevels :: Show k => Tree k k -> String
+showByLevels = unlines
+             . map (show . map rootValue)
+             . levels
+
+printByLevels :: Show k => Tree k k -> IO ()
+printByLevels = putStr . showByLevels
