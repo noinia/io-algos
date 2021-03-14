@@ -24,6 +24,7 @@ library
                   BinarySearch
                   Data.VEBLayout
                   Data.BinaryTree.LeafTree
+                  Data.BinaryTree.LeafTree.Embedded
                   Data.BinaryTree.LeafTree.Core
                   Data.BinaryTree.LeafTree.Complete
   other-modules:

@@ -1,20 +1,21 @@
 module Data.VEBLayout
   ( VEBTree
-  , VEBNode(..)
   , Index
   , fromAscList
 
   , vebLayout
-  , fromLayout
+  , Embedded.fromLayout
 
-  , lookup, lookupGT, lookupGE -- , lookupLT, lookupLE
-  , searchLeafR
+  , Embedded.lookup, Embedded.lookupGT, Embedded.lookupGE -- , lookupLT, lookupLE
+  , Embedded.searchLeafR
   ) where
 
 import           Control.DeepSeq
-import           Control.Exception(assert)
+import           Control.Exception (assert)
 import           Control.Monad.State.Strict
 import           Data.Bifunctor
+import qualified Data.BinaryTree.LeafTree.Embedded as Embedded
+import           Data.BinaryTree.LeafTree.Embedded (Index)
 import           Data.BinaryTree.LeafTree.Complete (split, lg, pow, div2, size, fullTree)
 import qualified Data.BinaryTree.LeafTree.Complete as Complete
 import           Data.BinaryTree.LeafTree.Core ( Tree(..)
@@ -34,21 +35,11 @@ import qualified Data.Vector as V
 import           Debug.Trace
 import           GHC.Generics
 import           Prelude hiding (lookup)
-
 import           System.Random (randomIO)
 
 --------------------------------------------------------------------------------
 
-type Index  = Word
-
-type VEBTree k v = V.Vector (VEBNode k v)
-
-data VEBNode k v = Leaf' !v
-                 | Node' {-# UNPACK #-} !Index !k {-# UNPACK #-} !Index
-                 deriving (Show,Eq,Ord,Generic,Generic1)
-
-instance (NFData k, NFData v) => NFData (VEBNode k v) where rnf = rnf1
-instance NFData k => NFData1 (VEBNode k)
+type VEBTree k v = Embedded.Tree k v
 
 -- | pre: input is a complete tree
 vebLayout   :: Tree k v -> VEBTree k v
@@ -57,10 +48,10 @@ vebLayout t = V.fromList $ vebLayout' 0 t (Complete.height t)
 vebLayout'                   :: Index        -- ^ starting index
                              -> Tree k v
                              -> Height       -- ^ height of the input tree
-                             -> [VEBNode k v]
-vebLayout' _ (Leaf v)       0 = [Leaf' v]
+                             -> [Embedded.Node k v]
+vebLayout' _ (Leaf v)       0 = [Embedded.Leaf v]
 vebLayout' s t@(Node l k r) h = case h of
-    1 -> let res = [ Node' (s+1) k (s+2)] <> vebLayout' (s+1) l 0 <> vebLayout' (s+2) r 0
+    1 -> let res = [ Embedded.Node (s+1) k (s+2)] <> vebLayout' (s+1) l 0 <> vebLayout' (s+2) r 0
          in res
     _ -> let ht               = div2 h -- height of the top tree
              hb               = h - ht - 1 -- height of the bottom tree
@@ -69,7 +60,7 @@ vebLayout' s t@(Node l k r) h = case h of
              sb               = size hb  -- size of a bottom tree
              leaf (i,(l,k,r)) = let sl = s + st + i*2*sb -- start of the left subtree
                                     sr = sl + sb         -- start of the right subtree
-                                in ( Leaf (Node' sl k sr)
+                                in ( Leaf (Embedded.Node sl k sr)
                                    , vebLayout' sl l hb <> vebLayout' sr r hb
                                    )
              (top',bottoms)   = foldTree leaf (\(l,ls) k (r,rs) -> (Node l k r,
@@ -80,28 +71,24 @@ vebLayout' s t@(Node l k r) h = case h of
 vebLayout' s t h = error "vebLayout': absurd" --  $ show (s,t,h)
 
 
-extract :: VEBNode k (VEBNode k v) -> VEBNode k v
+extract :: Embedded.Node k (Embedded.Node k v) -> Embedded.Node k v
 extract = \case
-  Leaf' v     -> v
-  Node' l k r -> Node' l k r
+  Embedded.Leaf v     -> v
+  Embedded.Node l k r -> Embedded.Node l k r
 
 
 
 roundTrip' h = roundTrip (fullTree 0 h)
 
-roundTrip t = fromLayout (vebLayout t) == t
+roundTrip t = Embedded.fromLayout (vebLayout t) == t
 
 
--- |
--- pre: input is nonEmpty
-fromLayout :: VEBTree k v -> Tree k v
-fromLayout = fromLayout' 0
 
 --------------------------------------------------------------------------------
 
-shift       :: Index -> [VEBNode k v] -> [VEBNode k v]
+shift       :: Index -> [Embedded.Node k v] -> [Embedded.Node k v]
 shift delta = map (\case
-                      Node' l k r -> Node' (l + delta) k (r + delta)
+                      Embedded.Node l k r -> Embedded.Node (l + delta) k (r + delta)
                       lf          -> lf
                   )
 
@@ -160,11 +147,11 @@ size' = \case
   LF' _   -> 1
   ND' h _ -> pow (h + 2) - 1
 
-layout'   :: (Show k, Show v) => Index -> VEBL k v -> NonEmpty (VEBNode k v)
+layout'   :: (Show k, Show v) => Index -> VEBL k v -> NonEmpty (Embedded.Node k v)
 layout' s = \case
-    LF' v                -> Leaf' v :| []
-    -- ND' 0  [(_,l),(k,r)] -> [ Node' (s+1) k (s+2) ] <> layout' (s+1) l <> layout' (s+2) r
-    -- ND' 1  [(_,l),(k,r)] -> [ Node' (s+1) k (s+4) ] <> layout' (s+1) l <> layout' (s+4) r
+    LF' v                -> Embedded.Leaf v :| []
+    -- ND' 0  [(_,l),(k,r)] -> [ Embedded.Node (s+1) k (s+2) ] <> layout' (s+1) l <> layout' (s+2) r
+    -- ND' 1  [(_,l),(k,r)] -> [ Embedded.Node (s+1) k (s+4) ] <> layout' (s+1) l <> layout' (s+4) r
     ND' hb chs           -> let top         = traceShowId $ layout fst bottomRoots
                                 bottomRoots = mkTop s sb chs
                                 sb          = size hb
@@ -175,17 +162,17 @@ layout' s = \case
 
 
 cleanLeaf = \case
-  Leaf' (k,lf) -> lf
-  Node' l k r  -> Node' l k r
+  Embedded.Leaf (k,lf) -> lf
+  Embedded.Node l k r  -> Embedded.Node l k r
 
-mkTop         :: Index -> Index -> NonEmpty (k, b) -> NonEmpty (k, VEBNode k v)
+mkTop         :: Index -> Index -> NonEmpty (k, b) -> NonEmpty (k, Embedded.Node k v)
 mkTop s sb xs = let chunks = chunksOf 2 xs in case chunks of
                   (_:|[_]) -> f (s+1) chunks
                   _        -> f s     chunks
   where
     f s' = NonEmpty.zipWith (\i ((m,l):|[(k,r)]) -> let li = s'+i*2*sb
                                                         ri = li + sb
-                                                    in (m,Node' li k ri)
+                                                    in (m,Embedded.Node li k ri)
                             ) (0:|[1..])
 
 
@@ -197,41 +184,6 @@ chunksOf n = assert (n > 0) $
                                                             else (i-1, (x:xs) :| yss)
                          ) (n, [] :| [])
 
---------------------------------------------------------------------------------
--- * Reconstructing a Tree
-
--- All of this should work for any tree embedded in an array.
-
-fromLayout'      :: Index -> VEBTree k v -> Tree k v
-fromLayout' s xs = go s
-  where
-    go i = case xs V.! fromIntegral i of
-             Leaf' v       -> Leaf v
-             Node' li k ri -> Node (go li) k (go ri)
-
--- fromLayout'                    :: Index -> VEBTree k v -> Height -> Tree k v
--- fromLayout' s xs h | h == 0    = let Leaf' v = xs V.! (fromIntegral s)
---                                  in Leaf v
---                    | otherwise = let Node' li k ri = xs V.! (fromIntegral s)
---                                  in Node (fromLayout' li xs (h-1)) k (fromLayout' ri xs (h-1))
-
-
--- | Binary-search on a tree. the predicate indicates if we should go right
-searchLeafR           :: (k -> Bool) -> VEBTree k v -> v
-searchLeafR goRight t = searchLeafR' goRight 0 t h
-  where
-    n = V.length t
-    h = lg n
-
--- | implementation of the binary search
-searchLeafR' :: (k -> Bool) -> Index -> VEBTree k v -> Height -> v
-searchLeafR' goRight = f
-  where
-    f s t h | h == 0    = let Leaf' lf = t V.! fromIntegral s
-                          in lf
-            | otherwise = let Node' li k ri = t V.! fromIntegral s
-                              h'            = h - 1
-                          in if goRight k then f ri t h' else f li t h'
 
 --------------------------------------------------------------------------------
 
@@ -253,7 +205,7 @@ showByLevels f = mapM_ (print . map showRoot)
              $ fullTree 0 3
 
 showOrig = showByLevels id
-showVEB  = showByLevels $ fromLayout . vebLayout
+showVEB  = showByLevels $ Embedded.fromLayout . vebLayout
 
 --------------------------------------------------------------------------------
 
@@ -265,30 +217,6 @@ testT = fromAscList $ map (\x -> (x,x)) [0,1,2,3,4,5,6,7]
 
 --------------------------------------------------------------------------------
 
-lookup   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe v
-lookup q = fmap snd . lookup' (== Just q)
-
-lookupGT   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
-lookupGT q = lookup' (> Just q)
-
-lookupGE   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
-lookupGE q = lookup' (>= Just q)
-
-
-
--- lookupLT   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
--- lookupLT q = lookup' (< Just q)
-
--- lookupLE   :: Ord k => k -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
--- lookupLE q = lookup' (<= Just q)
-
-
-
-
-
-lookup'     :: (Maybe k -> Bool) -> VEBTree (Maybe k) (Maybe (k,v)) -> Maybe (k,v)
-lookup' p t = let lf = searchLeafR p t
-              in if p (fst <$> lf) then lf else Nothing
 
 --------------------------------------------------------------------------------
 
