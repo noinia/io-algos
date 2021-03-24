@@ -35,7 +35,7 @@ library
                   base                    >=4.7 && <5
                 , containers              >= 0.6
                 , deepseq                 >= 1.4.4.0
-                -- , dlist                   >= 0.8
+                , dlist                   >= 0.8
                 -- , hgeometry-combinatorial >= 0.11.0.0
                 , mtl                     >= 2.2.2
                 , primitive               >= 0.6.4.0
@@ -45,6 +45,11 @@ library
                 , unpacked-maybe          >= 0.1.0.0
                 , vector                  >= 0.12
                 , integer-logarithms      >= 1.0
+                , vector-mmap             >= 0.0.3
+                , store                   >= 0.7
+                , th-utilities            >= 0.2.4.1
+                , indexed-traversable     >= 0.1
+                -- , flat                    >= 0.4.4
               -- , integer-gmp            >= 1.0.2.0
 
                 -- , tasty-bench >= 0.2.2
@@ -66,6 +71,9 @@ library
                     , ConstraintKinds
                     , DataKinds
                     , FlexibleInstances
+                    , TypeApplications
+                    , TypeFamilies
+                    , MultiParamTypeClasses
 
 
 executable io-algos-exe

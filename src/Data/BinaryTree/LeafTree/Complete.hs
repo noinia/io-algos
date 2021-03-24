@@ -27,6 +27,7 @@ import           Control.Monad.State.Strict
 import           Data.Bifunctor
 import           Data.BinaryTree.LeafTree.Core hiding (height)
 import           Data.Bits
+import qualified Data.Foldable as F
 import qualified Data.List as List
 import           Data.Maybe
 import qualified Data.Vector as V
@@ -54,20 +55,21 @@ fullTree s h | h == 0    = Leaf s
 -- | Builds a tree from the list of key,value pairs.
 --
 -- pre: the keys are given in non-decreasing order.
-fromAscList    :: [(k,v)] -> Tree (Maybe k) (Maybe (k,v))
-fromAscList xs = let n  = length xs
-                     h  = lg n
-                     m  = pow h
-                     m' | m == n    = m
-                        | otherwise = 2*m
-                 in first (fmap fst) . fromAscList2' $ replicate (m' - n) Nothing <> map Just xs
+fromAscList     :: Foldable f => f (k,v) -> Tree (Maybe k) (Maybe (k,v))
+fromAscList xs' = let xs = F.toList xs'
+                      n  = length xs'
+                      h  = lg n
+                      m  = pow h
+                      m' | m == n    = m
+                         | otherwise = 2*m
+                  in first (fmap fst) . fromAscList2' $ replicate (m' - n) Nothing <> map Just xs
 
 -- |
 --
 -- pre: - input is has lenght a power of 2
 --      - keys are given in non-decreasing order.
-fromAscList2 :: [(k,v)] -> Tree k (k,v)
-fromAscList2 = first fst . fromAscList2'
+fromAscList2 :: Foldable f => f (k,v) -> Tree k (k,v)
+fromAscList2 = first fst . fromAscList2' . F.toList
 
 fromAscList2' :: [k] -> Tree k k
 fromAscList2' = fst . head . pairup [] . map (\x -> (Leaf x,x))
