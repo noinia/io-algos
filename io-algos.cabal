@@ -54,6 +54,11 @@ library
 
                 -- , tasty-bench >= 0.2.2
 
+
+
+                , hspec, QuickCheck
+
+
   default-language: Haskell2010
   default-extensions: LambdaCase
                     , FlexibleContexts
@@ -91,15 +96,47 @@ executable io-algos-exe
 test-suite io-algos-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
+  build-tool-depends: hspec-discover:hspec-discover
   other-modules:
       Paths_io_algos
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , io-algos
+  build-depends: base
+               , io-algos
+               , hspec                   >= 2.7
+               , quickcheck-instances    >= 0.3
+               , random
+               , semigroups
+               , containers
+               , MonadRandom
+               , QuickCheck              >= 2.5
+               , bytestring
+               , semigroupoids
+
   default-language: Haskell2010
+
+  default-extensions: LambdaCase
+                    , FlexibleContexts
+                    , KindSignatures
+                    , GeneralizedNewtypeDeriving
+                    , StandaloneDeriving
+                    , DeriveFunctor
+                    , DeriveFoldable
+                    , DeriveTraversable
+                    , DeriveGeneric
+                    , ViewPatterns
+                    , PatternSynonyms
+                    , TupleSections
+                    , RankNTypes
+                    , ConstraintKinds
+                    , DataKinds
+                    , FlexibleInstances
+                    , TypeApplications
+                    , TypeFamilies
+                    , MultiParamTypeClasses
+
+
 
 benchmark io-algo-bench
 
