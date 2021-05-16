@@ -49,8 +49,8 @@ import qualified Text.Read as Read
 --------------------------------------------------------------------------------
 
 -- $setup
--- myTree = fromAscList . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
-myTree = fromAscList . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+-- myTree = fromAscList2 . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+myTree = fromAscList2 . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
 
 type Size = Word
 
@@ -207,10 +207,16 @@ keys :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty k
 keys = fmap fst . toAscList
 
 -- | Returns the elements, in order of ascending key value
+--
+-- >>> elems myTree
+-- "a" :| ["b","c","d"]
 elems :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty v
 elems = fmap snd . toAscList
 
 -- | Produces all elements in increasing order.
+--
+-- >>> toAscList myTree
+-- (0,"a") :| [(1,"b"),(2,"c"),(3,"d")]
 toAscList :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty (k,v)
 toAscList = foldVEB (curry singleton) (\_ chs -> foldMap1 (\(Two l r) -> l <> r) chs)
   -- FIXME: make this run in linear time, which I don't think it does at the moment
@@ -256,12 +262,19 @@ instance (Read a, Read b) => Read (NList a b) where
 
 ----------------------------------------
 
+-- fromAscList    :: (Foldable1 f, Functor f) => f (k,v) -> VEBTree NList k (Maybe v)
+-- fromAscList xs = padToPow2With Nothing . fmap Just
+--   second snd . build fst
+-- FIXME: How to get the keys is annoying now.
+
 -- | Build a VEBTree from an ascending (/non-descending) list of key,values
 --
--- >>> fromAscList . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+-- pre: n = 2^h for some h.
+--
+-- >>> fromAscList2 . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
 -- Node 1 (NList [(1,Two (Node 0 (NList [(0,Two (Leaf 0 "a") (Leaf 1 "b"))])) (Node 0 (NList [(2,Two (Leaf 2 "c") (Leaf 3 "d"))])))])
-fromAscList :: Foldable1 f => f (k,v) -> VEBTree NList k v
-fromAscList = second snd . build fst
+fromAscList2 :: Foldable1 f => f (k,v) -> VEBTree NList k v
+fromAscList2 = second snd . build fst
 
 -- | Builds a VEBTree, from v's in increasing order
 build   :: Foldable1 f => (v -> k) -> f v -> VEBTree NList k v
@@ -287,11 +300,14 @@ pairUp' = fmap (\(Two (k,l) (m,r)) -> (m, (k, Two l r))) .  pairUp
 
 
 -- | Convert the VEBTree into a normal (complete) binary leaf tree
-toTree      :: (v -> k) -> VEBTree NList k v -> Tree.Tree k (k,v)
-toTree getK = foldVEB leaf node
+--
+-- >>> toTree myTree
+-- Node (Node (Leaf (0,"a")) 0 (Leaf (1,"b"))) 1 (Node (Leaf (2,"c")) 2 (Leaf (3,"d")))
+toTree :: VEBTree NList k v -> Tree.Tree k (k,v)
+toTree = foldVEB leaf node
   where
     leaf k v = Tree.Leaf (k,v)
-    node _ (NList chs) = replaceLeaf (Complete.fromAscList2 chs)
+    node _ (MkNList chs) = replaceLeaf (Complete.fromAscList2 chs)
 
     replaceLeaf = foldTree (\(k,Two l r) -> Tree.Node l k r) Tree.Node
 
@@ -342,14 +358,13 @@ toTree' = foldVEB leaf node
 
 
 
-
-
-
 fromAscKeys  :: (Foldable1 f, Functor f) => f k -> TopVeb k k
 fromAscKeys = build' id
 
-fromAscList' :: Foldable1 f => f (k,v) -> TopVeb k (k,v)
-fromAscList' = build' fst
+fromAscList' :: Foldable1 f => f (k,v) -> TopVeb k v
+fromAscList' = second snd . build' fst
+
+
 
 -- | Builds a VEBTree, from v's in increasing order
 build'   :: Foldable1 f => (v -> k) -> f v -> TopVeb k v
@@ -360,16 +375,16 @@ buildHelper'     :: Foldable f => f (a, b) -> (a, TopVeb a (Two b))
 buildHelper' chs = case NonEmpty.nonEmpty $ pairUp' chs of
                      Nothing -> error "too few children; need at least 2"
                      Just xs -> let m = fst $ NonEmpty.last xs
-                                in (m, second snd . fromAscList' . fmap snd $ xs)
+                                in (m, fromAscList' . fmap snd $ xs)
 
 
 -- | Stores the children of every internal node into a VEBTree itself.
 withTopTrees :: VEBTree NList k v -> VEBTree (VEBTree NList) k v
-withTopTrees = foldVEB Leaf $ \h (MkNList chs) -> Node h (fromAscList chs)
+withTopTrees = foldVEB Leaf $ \h (MkNList chs) -> Node h (fromAscList2 chs)
 
 
 test :: [Int] -> TopVeb Int Int
-test = second snd . fromAscList' . NonEmpty.fromList . map (\x -> (x,x))
+test = fromAscList' . NonEmpty.fromList . map (\x -> (x,x))
 
 
 -- -- | Stores the children of every internal node into a VEBTree itself.

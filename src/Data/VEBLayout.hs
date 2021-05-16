@@ -305,11 +305,11 @@ showVEB  = showByLevels $ Embedded.fromLayout . vebLayout
 
 --------------------------------------------------------------------------------
 
-fromAscList :: [(k,v)] -> VEBTree (Maybe k) (Maybe (k,v))
+fromAscList :: NonEmpty (k,v) -> VEBTree (Maybe k) (Maybe (k,v))
 fromAscList = vebLayout . Complete.fromAscList
 
 -- testT :: Tree Int Int
-testT = fromAscList $ map (\x -> (x,x)) [0,1,2,3,4,5,6,7]
+testT = fromAscList . NonEmpty.fromList $ map (\x -> (x,x)) [0,1,2,3,4,5,6,7]
 
 --------------------------------------------------------------------------------
 

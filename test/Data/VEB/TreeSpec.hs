@@ -10,7 +10,7 @@ import           Data.Semigroup.Foldable
 import qualified Data.VEB.Tree as VEBTree
 import           Test.Hspec
 import           Test.QuickCheck
-import           Test.QuickCheck.Instances()
+import           Test.QuickCheck.Instances ()
 
 --------------------------------------------------------------------------------
 
@@ -25,9 +25,9 @@ type AscKV = AscList (Int,Int)
 
 
 instance (Arbitrary a, Ord a) => Arbitrary (AscList a) where
-  arbitrary = AscList . NonEmpty.sort <$> arbitrary
-
-
+  -- ^ up to roughly a milion elements.
+  arbitrary = do (h :: Int) <- arbitrary `suchThat` \c -> 0 < c && c < 20
+                 AscList . NonEmpty.sort . NonEmpty.fromList <$> vector (Complete.pow h)
 
 
 withValues :: Functor f => f a -> f (a,a)
@@ -36,11 +36,14 @@ withValues = fmap (\x -> (x,x))
 
 
 spec :: Spec
-spec = undefined
--- spec = describe "VEBTree test" $ do
---          it "toAscList . fromAscList" $ do
---            property $ \(AscList xs :: AscKV) ->
---                         VEBTree.toAscList' (VEBTree.fromAscList xs) == xs
+spec = describe "VEBTree NList tests" $ do
+         it "toAscList . fromAscList" $ do
+           property $ \(AscList xs :: AscKV) ->
+                        VEBTree.toAscList (VEBTree.fromAscList2 xs) == xs
+         describe "TopVEB tests" $ do
+           it "toAscList . fromAscList" $ do
+             property $ \(AscList xs :: AscKV) ->
+                        VEBTree.toAscList (VEBTree.toVEBTree $ VEBTree.fromAscList' xs) == xs
 
 
 

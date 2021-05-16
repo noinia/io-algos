@@ -20,7 +20,6 @@ source-repository head
 
 library
   exposed-modules:
-                  -- Lib
                   BinarySearch
                   Data.VEBLayout
                   Data.BinaryTree.LeafTree
@@ -31,11 +30,12 @@ library
 
 
   other-modules:
+      Paths_io_algos
 
   hs-source-dirs:
       src
   build-depends:
-                    base                    >=4.7 && <5
+                  base                    >=4.7 && <5
                 , containers              >= 0.6
                 , deepseq                 >= 1.4.4.0
                 , dlist                   >= 0.8
@@ -56,10 +56,6 @@ library
               -- , integer-gmp            >= 1.0.2.0
 
                 -- , tasty-bench >= 0.2.2
-
-
-
-                , hspec, QuickCheck
 
 
   default-language: Haskell2010
@@ -98,27 +94,27 @@ executable io-algos-exe
 
 test-suite spec
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Main.hs
   hs-source-dirs:
       test
   ghc-options: -Wall
   build-depends:
       base ==4.*
-    , io-algos
     , MonadRandom
     , QuickCheck              >= 2.5
     , bytestring
     , containers
     , hspec                   >= 2.7
-    , io-algos
     , quickcheck-instances    >= 0.3
     , random
     , semigroupoids
     , semigroups
+    , io-algos
 
   other-modules:
       Data.VEB.TreeSpec
       Paths_io_algos
+
   default-language: Haskell2010
   build-tool-depends: hspec-discover:hspec-discover == 2.*
 
@@ -148,9 +144,8 @@ test-suite doctests
   main-is:       doctests.hs
   build-depends: base
                , doctest >= 0.8
-               , io-algos
-               , mtl
-               , vector
+
+  default-language: Haskell2010
 
 benchmark bench
 
