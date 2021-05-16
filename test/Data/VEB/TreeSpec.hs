@@ -10,6 +10,7 @@ import           Data.Semigroup.Foldable
 import qualified Data.VEB.Tree as VEBTree
 import           Test.Hspec
 import           Test.QuickCheck
+import           Test.QuickCheck.Instances()
 
 --------------------------------------------------------------------------------
 
@@ -23,8 +24,8 @@ type AscK  = AscList Int
 type AscKV = AscList (Int,Int)
 
 
-instance Arbitrary AscK where
-  arbitrary =
+instance (Arbitrary a, Ord a) => Arbitrary (AscList a) where
+  arbitrary = AscList . NonEmpty.sort <$> arbitrary
 
 
 
@@ -34,9 +35,15 @@ withValues = fmap (\x -> (x,x))
 
 
 
-
 spec :: Spec
 spec = undefined
+-- spec = describe "VEBTree test" $ do
+--          it "toAscList . fromAscList" $ do
+--            property $ \(AscList xs :: AscKV) ->
+--                         VEBTree.toAscList' (VEBTree.fromAscList xs) == xs
+
+
+
 
 -- describe "VEBTree Tests" $ do
 --          property "Building complete tree NList" $ \(AscList xs :: AscKV) ->

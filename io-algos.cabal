@@ -27,12 +27,15 @@ library
                   Data.BinaryTree.LeafTree.Embedded
                   Data.BinaryTree.LeafTree.Core
                   Data.BinaryTree.LeafTree.Complete
+                  Data.VEB.Tree
+
+
   other-modules:
 
   hs-source-dirs:
       src
   build-depends:
-                  base                    >=4.7 && <5
+                    base                    >=4.7 && <5
                 , containers              >= 0.6
                 , deepseq                 >= 1.4.4.0
                 , dlist                   >= 0.8
@@ -93,28 +96,31 @@ executable io-algos-exe
     , io-algos
   default-language: Haskell2010
 
-test-suite io-algos-tests
+test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
-  build-tool-depends: hspec-discover:hspec-discover
-  other-modules:
-      Paths_io_algos
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends: base
-               , io-algos
-               , hspec                   >= 2.7
-               , quickcheck-instances    >= 0.3
-               , random
-               , semigroups
-               , containers
-               , MonadRandom
-               , QuickCheck              >= 2.5
-               , bytestring
-               , semigroupoids
+  ghc-options: -Wall
+  build-depends:
+      base ==4.*
+    , io-algos
+    , MonadRandom
+    , QuickCheck              >= 2.5
+    , bytestring
+    , containers
+    , hspec                   >= 2.7
+    , io-algos
+    , quickcheck-instances    >= 0.3
+    , random
+    , semigroupoids
+    , semigroups
 
+  other-modules:
+      Data.VEB.TreeSpec
+      Paths_io_algos
   default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*
 
   default-extensions: LambdaCase
                     , FlexibleContexts
@@ -136,9 +142,17 @@ test-suite io-algos-tests
                     , TypeFamilies
                     , MultiParamTypeClasses
 
+test-suite doctests
+  type:          exitcode-stdio-1.0
+  ghc-options:   -threaded
+  main-is:       doctests.hs
+  build-depends: base
+               , doctest >= 0.8
+               , io-algos
+               , mtl
+               , vector
 
-
-benchmark io-algo-bench
+benchmark bench
 
   hs-source-dirs: bench
 

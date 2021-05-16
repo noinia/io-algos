@@ -47,7 +47,9 @@ import           Prelude hiding (lookup)
 
 --------------------------------------------------------------------------------
 
-
+-- $setup
+-- myTree = fromAscList . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+myTree = fromAscList . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
 
 type Size = Word
 
@@ -77,7 +79,10 @@ data Two a = Two !a !a
 
 instance Foldable1 Two
 
--- pre: even number of elements
+-- | pre: even number of elements
+--
+-- >>> pairUp [0..5]
+-- [Two 0 1,Two 2 3,Two 4 5]
 pairUp :: Foldable f => f a -> [Two a]
 pairUp = go . F.toList
   where
@@ -85,7 +90,11 @@ pairUp = go . F.toList
     go [_]        = error "pairUp: Odd number of elements!"
     go (a:b:rest) = Two a b : go rest
 
+
 -- | pre: n = m*k for some natural number m
+--
+-- >>> chunksOf 3 (0 :| [1..8])
+-- (0 :| [1,2]) :| [3 :| [4,5],6 :| [7,8]]
 chunksOf   :: Foldable1 f => Size -> f a -> NonEmpty (NonEmpty a)
 chunksOf k = go . F.toList
   where
@@ -156,9 +165,6 @@ instance Bifunctor f => Bifunctor (VEBTree f) where
 
 
 
-
-
-
 instance Bifoldable f => Bifoldable (VEBTree f) where
   bifoldMap f g = \case
     Leaf k x   -> f k <> g x
@@ -171,7 +177,7 @@ instance Bitraversable f => Bitraversable (VEBTree f) where
     Leaf k x   -> Leaf <$> f k <*> g x
     Node h chs -> Node h <$> bitraverse f (traverse (bitraverse f g)) chs
 
-
+-- | Bottom up fold over a VEBTree
 foldVEB           :: Bifunctor f
                   => (k -> v -> b) -> (Height -> f k (Two b) -> b) -> VEBTree f k v -> b
 foldVEB leaf node = go
@@ -182,14 +188,20 @@ foldVEB leaf node = go
 
 
 -- | Get a list of bottom trees
+--
+-- >>> mapM_ print $ bottoms myTree
+-- Node 0 (NList ((0,Two (Leaf 0 (0,"a")) (Leaf 1 (1,"b"))) :| []))
+-- Node 0 (NList ((2,Two (Leaf 2 (2,"c")) (Leaf 3 (3,"d"))) :| []))
 bottoms :: Foldable (f k) => VEBTree f k v -> [VEBTree f k v]
 bottoms = \case
   Leaf _ _   -> []
   Node _ chs -> concatMap F.toList $ F.toList chs
 
 
-
 -- | Returns the keys in ascending order
+--
+-- >>> keys myTree
+-- 0 :| [1,2,3]
 keys :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty k
 keys = fmap fst . toAscList
 
@@ -198,13 +210,12 @@ elems :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty v
 elems = fmap snd . toAscList
 
 
-
 toAscList :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty (k,v)
 toAscList = foldVEB (curry singleton) (\_ chs -> foldMap1 (\(Two l r) -> l <> r) chs)
   -- FIXME: make this run in linear time, which I don't think it does at the moment
 
-
-
+-- toAscList' :: (Foldable1 (f k), Bifunctor f) => VEBTree f k (k,v) -> NonEmpty (k,v)
+-- toAscList' = fmap snd . toAscList
 
 
 
@@ -230,10 +241,21 @@ instance Bifoldable1 NList
 instance Bitraversable NList where
   bitraverse f g (NList xs) = NList <$> traverse (bitraverse f g) xs
 
+instance Foldable1 (NList a)
+
 ----------------------------------------
 
+-- | Build a VEBTree from an ascending (/non-descending) list of key,values
+--
+-- |
+-- >>> fromAscList . NonEmpty.fromList $ [(0,0),(1,1),(2,2),(3,3)]
+-- Node 1 (NList ((1,Two (Node 0 (NList ((0,Two (Leaf 0 (0,0)) (Leaf 1 (1,1))) :| []))) (Node 0 (NList ((2,Two (Leaf 2 (2,2)) (Leaf 3 (3,3))) :| [])))) :| []))
 fromAscList :: Foldable1 f => f (k,v) -> VEBTree NList k (k,v)
 fromAscList = build fst
+
+
+
+
 
 
 -- | Builds a VEBTree, from v's in increasing order
