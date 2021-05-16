@@ -50,7 +50,11 @@ import qualified Text.Read as Read
 
 -- $setup
 -- myTree = fromAscList2 . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+-- myTree' = fromAscList' . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+
 myTree = fromAscList2 . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+myTree' = fromAscList' . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+
 
 type Size = Word
 
@@ -349,6 +353,9 @@ pattern Node' h chs = TopVeb (Node h chs)
 
 
 -- | Convert the VEBTree into a normal (complete) binary leaf tree
+--
+-- >>> toTree' $ toVEBTree myTree'
+-- Node (Node (Leaf (0,"a")) 0 (Leaf (1,"b"))) 1 (Node (Leaf (2,"c")) 2 (Leaf (3,"d")))
 toTree' :: VEBTree TopVeb k v -> Tree.Tree k (k,v)
 toTree' = foldVEB leaf node
   where
@@ -356,14 +363,15 @@ toTree' = foldVEB leaf node
     topLeaf k (Two l r) = Tree.Node l k r
     node _ (TopVeb chs) = foldVEB topLeaf node chs
 
-
-
 fromAscKeys  :: (Foldable1 f, Functor f) => f k -> TopVeb k k
 fromAscKeys = build' id
 
+-- | Build a TopVEB
+--
+-- >>> fromAscList' . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+-- TopVeb (Node 1 (TopVeb (Leaf 1 (Two (Node 0 (TopVeb (Leaf 0 (Two (Leaf 0 "a") (Leaf 1 "b"))))) (Node 0 (TopVeb (Leaf 2 (Two (Leaf 2 "c") (Leaf 3 "d")))))))))
 fromAscList' :: Foldable1 f => f (k,v) -> TopVeb k v
 fromAscList' = second snd . build' fst
-
 
 
 -- | Builds a VEBTree, from v's in increasing order
@@ -383,14 +391,24 @@ withTopTrees :: VEBTree NList k v -> VEBTree (VEBTree NList) k v
 withTopTrees = foldVEB Leaf $ \h (MkNList chs) -> Node h (fromAscList2 chs)
 
 
-test :: [Int] -> TopVeb Int Int
-test = fromAscList' . NonEmpty.fromList . map (\x -> (x,x))
+test   :: Int -> TopVeb Int String
+test h = fromAscList' . NonEmpty.fromList $ zip [0..(pow h - 1)] vals
+
+vals = [ f i s | i <- [1..], s <- strs ]
+  where
+    f i s = concat $ replicate i s
+    strs = map (:[]) chars
+    chars = ['a'..'z'] <> ['A'..'Z']
+
 
 
 -- -- | Stores the children of every internal node into a VEBTree itself.
 -- withTopTrees' :: VEBTree NList k v -> TopVeb k v
 -- withTopTrees' = foldVEB Leaf' $ \h (NList chs) -> Node' h (second snd . fromAscList' $ chs)
 
+--
+-- >>> size myTree'
+-- 4
 size :: TopVeb k v -> Size
 size = \case
   Leaf' _ _   -> 1
@@ -433,8 +451,8 @@ printTopVEB (TopVeb t) = case t of
 --   Node _ (TopVeb chs) -> F.toList $ toAscList chs
 
 
-
-
+toEmbedded :: TopVeb k v -> V.Vector (Embedded.Node k (k,v))
+toEmbedded = V.fromList . NonEmpty.toList . embed 0
 
 embed              :: Index -- ^ first free index we can assign to
                    -> TopVeb k v
