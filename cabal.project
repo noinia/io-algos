@@ -1,0 +1,4 @@
+tests: true
+benchmarks: true
+write-ghc-environment-files: always
+packages: .

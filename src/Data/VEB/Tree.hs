@@ -44,6 +44,7 @@ import qualified Data.Vector as V
 import           Debug.Trace
 import           GHC.Generics
 import           Prelude hiding (lookup)
+import qualified Text.Read as Read
 
 --------------------------------------------------------------------------------
 
@@ -190,8 +191,8 @@ foldVEB leaf node = go
 -- | Get a list of bottom trees
 --
 -- >>> mapM_ print $ bottoms myTree
--- Node 0 (NList ((0,Two (Leaf 0 (0,"a")) (Leaf 1 (1,"b"))) :| []))
--- Node 0 (NList ((2,Two (Leaf 2 (2,"c")) (Leaf 3 (3,"d"))) :| []))
+-- Node 0 (NList [(0,Two (Leaf 0 "a") (Leaf 1 "b"))])
+-- Node 0 (NList [(2,Two (Leaf 2 "c") (Leaf 3 "d"))])
 bottoms :: Foldable (f k) => VEBTree f k v -> [VEBTree f k v]
 bottoms = \case
   Leaf _ _   -> []
@@ -209,71 +210,72 @@ keys = fmap fst . toAscList
 elems :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty v
 elems = fmap snd . toAscList
 
-
+-- | Produces all elements in increasing order.
 toAscList :: (Foldable1 (f k), Bifunctor f) => VEBTree f k v -> NonEmpty (k,v)
 toAscList = foldVEB (curry singleton) (\_ chs -> foldMap1 (\(Two l r) -> l <> r) chs)
   -- FIXME: make this run in linear time, which I don't think it does at the moment
 
--- toAscList' :: (Foldable1 (f k), Bifunctor f) => VEBTree f k (k,v) -> NonEmpty (k,v)
--- toAscList' = fmap snd . toAscList
-
-
-
-
-
-
-
-
-
-
 ----------------------------------------
 
-newtype NList a b = NList (NonEmpty (a,b))
-                  deriving (Show,Eq,Ord,Read,Functor,Foldable,Traversable)
+-- | Non-empy lsit of pairs (a,b)
+newtype NList a b = MkNList (NonEmpty (a,b))
+                  deriving (Eq,Ord,Functor,Foldable,Traversable)
 
 instance Bifunctor NList where
-  bimap f g (NList xs) = NList $ fmap (bimap f g) xs
+  bimap f g (MkNList xs) = MkNList $ fmap (bimap f g) xs
 
 instance Bifoldable NList where
-  bifoldMap f g (NList xs) = foldMap (bifoldMap f g) xs
+  bifoldMap f g (MkNList xs) = foldMap (bifoldMap f g) xs
 instance Bifoldable1 NList
 
 instance Bitraversable NList where
-  bitraverse f g (NList xs) = NList <$> traverse (bitraverse f g) xs
+  bitraverse f g (MkNList xs) = MkNList <$> traverse (bitraverse f g) xs
 
 instance Foldable1 (NList a)
+
+-- | Helper pattern that will make showing NLists a bit more
+-- convenient.
+pattern NList    :: [(a,b)] -> NList a b
+pattern NList xs <- (MkNList (NonEmpty.toList -> xs))
+  where
+    NList = MkNList . NonEmpty.fromList
+{-# COMPLETE NList #-}
+
+instance (Show a, Show b) => Show (NList a b) where
+  showsPrec d (NList xs) = showParen (d > app_prec) $
+                             showString "NList " . showsPrec (app_prec+1) xs
+    where app_prec = 10
+
+instance (Read a, Read b) => Read (NList a b) where
+  readPrec = Read.parens . Read.prec app_prec $ do
+                                 Read.Ident "NList" <- Read.lexP
+                                 m <- Read.step Read.readPrec
+                                 return $ NList m
+    where app_prec = 10
+  readListPrec = Read.readListPrecDefault
 
 ----------------------------------------
 
 -- | Build a VEBTree from an ascending (/non-descending) list of key,values
 --
--- |
--- >>> fromAscList . NonEmpty.fromList $ [(0,0),(1,1),(2,2),(3,3)]
--- Node 1 (NList ((1,Two (Node 0 (NList ((0,Two (Leaf 0 (0,0)) (Leaf 1 (1,1))) :| []))) (Node 0 (NList ((2,Two (Leaf 2 (2,2)) (Leaf 3 (3,3))) :| [])))) :| []))
-fromAscList :: Foldable1 f => f (k,v) -> VEBTree NList k (k,v)
-fromAscList = build fst
-
-
-
-
-
+-- >>> fromAscList . NonEmpty.fromList $ [(0,"a"),(1,"b"),(2,"c"),(3,"d")]
+-- Node 1 (NList [(1,Two (Node 0 (NList [(0,Two (Leaf 0 "a") (Leaf 1 "b"))])) (Node 0 (NList [(2,Two (Leaf 2 "c") (Leaf 3 "d"))])))])
+fromAscList :: Foldable1 f => f (k,v) -> VEBTree NList k v
+fromAscList = second snd . build fst
 
 -- | Builds a VEBTree, from v's in increasing order
 build   :: Foldable1 f => (v -> k) -> f v -> VEBTree NList k v
 build f = snd . bottomUp (mkLeaf f)
                          (\h n chs -> Node h <$> buildHelper chs)
 
-
+mkLeaf     :: (v -> k) -> v -> (k, VEBTree f k v)
 mkLeaf f v = let k = f v in (k, Leaf k v)
-
 
 buildHelper     :: Foldable f => f (a, b) -> (a, NList a (Two b))
 buildHelper chs = case NonEmpty.nonEmpty $ pairUp' chs of
                     Nothing -> error "too few children; need at least 2"
                     Just xs -> let m = fst $ NonEmpty.last xs
-                               in (m,NList . fmap snd $ xs)
-
-
+                               in (m,MkNList . fmap snd $ xs)
 
 pairUp' :: Foldable f => f (k, b) -> [(k, (k, Two b))]
 pairUp' = fmap (\(Two (k,l) (m,r)) -> (m, (k, Two l r))) .  pairUp
@@ -309,15 +311,15 @@ toTree getK = foldVEB leaf node
 --------------------------------------------------------------------------------
 --
 
+-- | VEBTree in which the children of a node are stored in a VEBTree again.
 newtype TopVeb k v = TopVeb (VEBTree TopVeb k v)
   deriving (Show,Eq,Functor,Foldable,Traversable,Bifunctor,Bifoldable
            ,Foldable1
            -- ,FunctorWithIndex Index,FoldableWithIndex Index
            )
 
+toVEBTree            :: TopVeb k v -> VEBTree TopVeb k v
 toVEBTree (TopVeb t) = t
-
-
 
 -- instance TraversableWithIndex Index (TopVeb k) where
 --   itraverse f (TopVeb t) = TopVeb <$> itraverse f t
@@ -363,7 +365,7 @@ buildHelper' chs = case NonEmpty.nonEmpty $ pairUp' chs of
 
 -- | Stores the children of every internal node into a VEBTree itself.
 withTopTrees :: VEBTree NList k v -> VEBTree (VEBTree NList) k v
-withTopTrees = foldVEB Leaf $ \h (NList chs) -> Node h (second snd . fromAscList $ chs)
+withTopTrees = foldVEB Leaf $ \h (MkNList chs) -> Node h (fromAscList chs)
 
 
 test :: [Int] -> TopVeb Int Int
